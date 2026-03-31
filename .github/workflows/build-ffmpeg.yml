@@ -1,0 +1,43 @@
+name: Build FFmpeg with libdvdnav
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+
+jobs:
+  build-ffmpeg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            subversion ragel curl texinfo g++ ed bison flex cvs yasm \
+            automake libtool autoconf gcc cmake git make pkg-config \
+            zlib1g-dev unzip pax nasm gperf autogen bzip2 \
+            autoconf-archive p7zip-full meson clang python3-distutils \
+            libtool-bin
+
+      - name: Prepare build script (Enable libdvdnav)
+        run: |
+          # Add build_libdvdread and build_libdvdnav to the dependency build list
+          # We insert them after build_libxvid as a safe spot near the end of the dependencies
+          sed -i '/build_libxvid/a \   build_libdvdread\n   build_libdvdnav' cross_compile_ffmpeg.sh
+          
+          # Add --enable-libdvdnav and --enable-libdvdread to FFmpeg configure options
+          sed -i 's/config_options+=" --enable-gnutls"/config_options+=" --enable-gnutls --enable-libdvdnav --enable-libdvdread"/' cross_compile_ffmpeg.sh
+
+      - name: Run cross-compilation script
+        run: |
+          # Use -d for defaults: win64, static, skip prompts
+          ./cross_compile_ffmpeg.sh -d
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-win64-dvdnav
+          path: sandbox/redist/*.7z
