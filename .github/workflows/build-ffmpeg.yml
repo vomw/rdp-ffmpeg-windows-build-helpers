@@ -25,20 +25,22 @@ jobs:
       - name: Prepare build script (Enable libdvdnav)
         run: |
           # Update libdvdread to 7.0.1 from VideoLAN
-          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz|https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.bz2|g' cross_compile_ffmpeg.sh
+          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz|https://download.videolan.org/pub/videolan/libdvdread/libdvdread-7.0.1.tar.bz2|g' cross_compile_ffmpeg.sh
           sed -i 's/libdvdread-4.9.9/libdvdread-7.0.1/g' cross_compile_ffmpeg.sh
 
           # Update libdvdnav to 7.0.0 from VideoLAN
-          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz|https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.bz2|g' cross_compile_ffmpeg.sh
+          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz|https://download.videolan.org/pub/videolan/libdvdnav/libdvdnav-7.0.0.tar.bz2|g' cross_compile_ffmpeg.sh
           sed -i 's/libdvdnav-4.2.1/libdvdnav-7.0.0/g' cross_compile_ffmpeg.sh
 
           # Add build_libdvdread and build_libdvdnav to the dependency build list
           # We insert them after build_libxvid as a safe spot near the end of the dependencies
           sed -i '/build_libxvid/a \   build_libdvdread\n   build_libdvdnav' cross_compile_ffmpeg.sh
-          
+
           # Add --enable-libdvdnav and --enable-libdvdread to FFmpeg configure options
           sed -i 's/config_options+=" --enable-gnutls"/config_options+=" --enable-gnutls --enable-libdvdnav --enable-libdvdread"/' cross_compile_ffmpeg.sh
 
+          # Disable SVT-AV1 build due to patch error, as it's not a core requirement for this task.
+          sed -i 's/build_svt_av1=y/build_svt_av1=n/g' cross_compile_ffmpeg.sh
       - name: Run cross-compilation script
         run: |
           # Use -d for defaults: win64, static, skip prompts
