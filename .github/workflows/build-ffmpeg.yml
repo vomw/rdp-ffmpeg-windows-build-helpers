@@ -25,11 +25,11 @@ jobs:
       - name: Prepare build script (Enable libdvdnav)
         run: |
           # Update libdvdread to 7.0.1 from VideoLAN
-          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz|https://download.videolan.org/pub/videolan/libdvdread/libdvdread-7.0.1.tar.bz2|g' cross_compile_ffmpeg.sh
+          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz|https://get.videolan.org/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz|g' cross_compile_ffmpeg.sh
           sed -i 's/libdvdread-4.9.9/libdvdread-7.0.1/g' cross_compile_ffmpeg.sh
 
           # Update libdvdnav to 7.0.0 from VideoLAN
-          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz|https://download.videolan.org/pub/videolan/libdvdnav/libdvdnav-7.0.0.tar.bz2|g' cross_compile_ffmpeg.sh
+          sed -i 's|http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz|https://get.videolan.org/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz|g' cross_compile_ffmpeg.sh
           sed -i 's/libdvdnav-4.2.1/libdvdnav-7.0.0/g' cross_compile_ffmpeg.sh
 
           # Add build_libdvdread and build_libdvdnav to the dependency build list
