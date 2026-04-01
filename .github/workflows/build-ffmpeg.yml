@@ -14,8 +14,8 @@ jobs:
 
       - name: Install host dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
             subversion ragel curl texinfo g++ ed bison flex cvs yasm \
             automake libtool autoconf gcc cmake git make pkg-config \
             zlib1g-dev unzip pax nasm gperf autogen bzip2 \
@@ -24,13 +24,15 @@ jobs:
 
       - name: Prepare build script (Enable libdvdnav)
         run: |
-          set -x
-          # Replace build_libdvdread with Meson version
-          cat << 'EOF' > libdvdread_new.sh
+          # Use a heredoc to define the new functions
+          cat << 'EOF' >> cross_compile_ffmpeg.sh
+
+          # Redefining DVD libraries to use Meson and latest versions
           build_libdvdread() {
             build_libdvdcss
             if [ ! -f "libdvdread-7.0.1/unpacked.successfully" ]; then
-              curl -L https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz
+              echo "Downloading libdvdread 7.0.1..."
+              curl -sL https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz
               tar -xf libdvdread-7.0.1.tar.xz
               touch libdvdread-7.0.1/unpacked.successfully
             fi
@@ -38,13 +40,11 @@ jobs:
               generic_meson_ninja_install
             cd ..
           }
-          EOF
-          
-          # Replace build_libdvdnav with Meson version
-          cat << 'EOF' > libdvdnav_new.sh
+
           build_libdvdnav() {
             if [ ! -f "libdvdnav-7.0.0/unpacked.successfully" ]; then
-              curl -L https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz
+              echo "Downloading libdvdnav 7.0.0..."
+              curl -sL https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz
               tar -xf libdvdnav-7.0.0.tar.xz
               touch libdvdnav-7.0.0/unpacked.successfully
             fi
@@ -54,22 +54,20 @@ jobs:
           }
           EOF
 
-          # Use perl for multi-line replacement of the functions
-          perl -0777 -i -pe 's/build_libdvdread\(\) \{.*?\n\}/`cat libdvdread_new.sh`/ese' cross_compile_ffmpeg.sh
-          perl -0777 -i -pe 's/build_libdvdnav\(\) \{.*?\n\}/`cat libdvdnav_new.sh`/ese' cross_compile_ffmpeg.sh
+          # Insert calls into build_ffmpeg_dependencies after build_libsrt
+          sed -i '/build_libsrt # requires gnutls/a \  build_libdvdread\n  build_libdvdnav' cross_compile_ffmpeg.sh
 
-          # Add build_libdvdread and build_libdvdnav to the dependency build list
-          # We insert them after build_libxvid as a safe spot near the end of the dependencies
-          sed -i '/build_libxvid/a \   build_libdvdread\n   build_libdvdnav' cross_compile_ffmpeg.sh
+          # Disable SVT-AV1 build (both call and FFmpeg config)
+          sed -i 's/build_svt-av1/ # build_svt-av1/g' cross_compile_ffmpeg.sh
+          sed -i 's/--enable-libsvtav1//g' cross_compile_ffmpeg.sh
 
           # Add --enable-libdvdnav and --enable-libdvdread to FFmpeg configure options
+          # Appending to gnutls line as a safe anchor
           sed -i 's/config_options+=" --enable-gnutls"/config_options+=" --enable-gnutls --enable-libdvdnav --enable-libdvdread"/' cross_compile_ffmpeg.sh
 
-          # Disable SVT-AV1 build due to patch error, as it's not a core requirement for this task.
-          sed -i 's/build_svt_av1=y/build_svt_av1=n/g' cross_compile_ffmpeg.sh
+          echo "Build script prepared successfully."
 
       - name: Run cross-compilation script
-        id: build
         run: |
           # Use -d for defaults: win64, static, skip prompts
           ./cross_compile_ffmpeg.sh -d
@@ -77,6 +75,7 @@ jobs:
       - name: Debug failure
         if: failure()
         run: |
+          echo "Build failed. Searching for relevant logs..."
           find sandbox -name config.log -exec echo "--- {} ---" \; -exec cat {} \;
           find sandbox -name meson-log.txt -exec echo "--- {} ---" \; -exec cat {} \;
 
