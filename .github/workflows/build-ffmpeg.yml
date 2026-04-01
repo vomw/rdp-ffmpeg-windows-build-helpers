@@ -20,19 +20,43 @@ jobs:
             automake libtool autoconf gcc cmake git make pkg-config \
             zlib1g-dev unzip pax nasm gperf autogen bzip2 \
             autoconf-archive p7zip-full meson clang python3-distutils \
-            libtool-bin m4 gettext
+            libtool-bin m4 gettext perl
 
       - name: Prepare build script (Enable libdvdnav)
         run: |
           set -x
-          # Update libdvdread to 7.0.1 from VideoLAN (Direct URL)
-          # We replace the function call with a manual download/unpack to be 100% sure of the directory name
-          sed -i 's|download_and_unpack_file http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz.*|curl -L https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz \&\& tar -xf libdvdread-7.0.1.tar.xz \&\& touch libdvdread-7.0.1/unpacked.successfully|' cross_compile_ffmpeg.sh
-          sed -i 's/cd libdvdread-4.9.9/cd libdvdread-7.0.1/' cross_compile_ffmpeg.sh
+          # Replace build_libdvdread with Meson version
+          cat << 'EOF' > libdvdread_new.sh
+          build_libdvdread() {
+            build_libdvdcss
+            if [ ! -f "libdvdread-7.0.1/unpacked.successfully" ]; then
+              curl -L https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz
+              tar -xf libdvdread-7.0.1.tar.xz
+              touch libdvdread-7.0.1/unpacked.successfully
+            fi
+            cd libdvdread-7.0.1
+              generic_meson_ninja_install
+            cd ..
+          }
+          EOF
+          
+          # Replace build_libdvdnav with Meson version
+          cat << 'EOF' > libdvdnav_new.sh
+          build_libdvdnav() {
+            if [ ! -f "libdvdnav-7.0.0/unpacked.successfully" ]; then
+              curl -L https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz
+              tar -xf libdvdnav-7.0.0.tar.xz
+              touch libdvdnav-7.0.0/unpacked.successfully
+            fi
+            cd libdvdnav-7.0.0
+              generic_meson_ninja_install
+            cd ..
+          }
+          EOF
 
-          # Update libdvdnav to 7.0.0 from VideoLAN (Direct URL)
-          sed -i 's|download_and_unpack_file http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz.*|curl -L https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz \&\& tar -xf libdvdnav-7.0.0.tar.xz \&\& touch libdvdnav-7.0.0/unpacked.successfully|' cross_compile_ffmpeg.sh
-          sed -i 's/cd libdvdnav-4.2.1/cd libdvdnav-7.0.0/' cross_compile_ffmpeg.sh
+          # Use perl for multi-line replacement of the functions
+          perl -0777 -i -pe 's/build_libdvdread\(\) \{.*?\n\}/`cat libdvdread_new.sh`/ese' cross_compile_ffmpeg.sh
+          perl -0777 -i -pe 's/build_libdvdnav\(\) \{.*?\n\}/`cat libdvdnav_new.sh`/ese' cross_compile_ffmpeg.sh
 
           # Add build_libdvdread and build_libdvdnav to the dependency build list
           # We insert them after build_libxvid as a safe spot near the end of the dependencies
@@ -43,10 +67,6 @@ jobs:
 
           # Disable SVT-AV1 build due to patch error, as it's not a core requirement for this task.
           sed -i 's/build_svt_av1=y/build_svt_av1=n/g' cross_compile_ffmpeg.sh
-          
-          # Add debug info after unpacking in the script
-          sed -i '/cd libdvdread-7.0.1/a \    ls -F' cross_compile_ffmpeg.sh
-          sed -i '/cd libdvdnav-7.0.0/a \    ls -F' cross_compile_ffmpeg.sh
 
       - name: Run cross-compilation script
         id: build
@@ -54,10 +74,11 @@ jobs:
           # Use -d for defaults: win64, static, skip prompts
           ./cross_compile_ffmpeg.sh -d
 
-      - name: Debug FFmpeg failure
+      - name: Debug failure
         if: failure()
         run: |
           find sandbox -name config.log -exec echo "--- {} ---" \; -exec cat {} \;
+          find sandbox -name meson-log.txt -exec echo "--- {} ---" \; -exec cat {} \;
 
       - name: Upload Build Artifacts
         if: success()
