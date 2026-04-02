@@ -15,7 +15,10 @@ def patch_file(filename):
     touch libdvdread-7.0.1/unpacked.successfully
   fi
   cd libdvdread-7.0.1
-    generic_meson_ninja_install
+    # Meson build needs to know about libdvdcss and some flags
+    # We use -Dcss=enabled to ensure it links against libdvdcss
+    # We also need to help it find libdvdcss headers if pkg-config fails
+    generic_meson_ninja_install "-Dcss=enabled"
   cd ..
 }"""
     
