@@ -77,6 +77,19 @@ def patch_file(filename):
         print("Error: --enable-gnutls anchor not found!")
         sys.exit(1)
 
+    # 6. Fix Meson cross-file pkgconfig and deprecations
+    print("Fixing build_meson_cross pkg-config and properties...")
+    content = content.replace("pkgconfig = '${cross_prefix}pkg-config'", "pkgconfig = 'pkg-config'")
+    content = content.replace("[properties]", "[built-in options]")
+
+    # 7. Fix mfx_dispatch Automake error if it exists
+    # Makefile.am:54: error: 'libintel_gfx_api-x64.a' is not a standard libtool library name
+    if 'build_intel_qsv_mfx() {' in content:
+        print("Patching mfx_dispatch build to fix Automake error...")
+        # Use a more robust way to insert the sed commands
+        mfx_patch = 'cd mfx_dispatch_git\n    sed -i "s/libintel_gfx_api-x64.a/libintel_gfx_api_x64.la/g" Makefile.am || true\n    sed -i "s/libintel_gfx_api-x86.a/libintel_gfx_api_x86.la/g" Makefile.am || true'
+        content = content.replace('cd mfx_dispatch_git', mfx_patch)
+
     with open(filename, 'w') as f:
         f.write(content)
     print("Patching complete.")
