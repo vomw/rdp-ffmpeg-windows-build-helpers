@@ -888,6 +888,8 @@ build_nv_headers() {
 build_intel_qsv_mfx() { # disableable via command line switch...
   do_git_checkout https://github.com/lu-zero/mfx_dispatch.git mfx_dispatch_git 2cd279f # lu-zero?? oh well seems somewhat supported...
   cd mfx_dispatch_git
+    sed -i "s/libintel_gfx_api-x64.a/libintel_gfx_api_x64.la/g" Makefile.am || true
+    sed -i "s/libintel_gfx_api-x86.a/libintel_gfx_api_x86.la/g" Makefile.am || true
     if [[ ! -f "configure" ]]; then
       autoreconf -fiv || exit 1
       automake --add-missing || exit 1
@@ -1735,6 +1737,8 @@ build_fribidi() {
 }
 
 build_libsrt() {
+  build_libdvdread
+  build_libdvdnav
   # do_git_checkout https://github.com/Haivision/srt.git # might be able to use these days...?
   download_and_unpack_file https://github.com/Haivision/srt/archive/v1.4.1.tar.gz srt-1.4.1
   cd srt-1.4.1
@@ -2041,23 +2045,29 @@ build_lsmash() { # an MP4 library
 
 build_libdvdread() {
   build_libdvdcss
-  download_and_unpack_file http://dvdnav.mplayerhq.hu/releases/libdvdread-4.9.9.tar.xz # last revision before 5.X series so still works with MPlayer
-  cd libdvdread-4.9.9
-    # XXXX better CFLAGS here...
-    generic_configure "CFLAGS=-DHAVE_DVDCSS_DVDCSS_H LDFLAGS=-ldvdcss --enable-dlfcn" # vlc patch: "--enable-libdvdcss" # XXX ask how I'm *supposed* to do this to the dvdread peeps [svn?]
-    do_make_and_make_install
-    sed -i.bak 's/-ldvdread.*/-ldvdread -ldvdcss/' "$PKG_CONFIG_PATH/dvdread.pc"
+  if [ ! -f "libdvdread-7.0.1/unpacked.successfully" ]; then
+    echo "Downloading libdvdread 7.0.1..."
+    curl -sL https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz
+    tar -xf libdvdread-7.0.1.tar.xz
+    touch libdvdread-7.0.1/unpacked.successfully
+  fi
+  cd libdvdread-7.0.1
+    # Meson build needs to know about libdvdcss and some flags
+    # We use -Dcss=enabled to ensure it links against libdvdcss
+    # We also need to help it find libdvdcss headers if pkg-config fails
+    generic_meson_ninja_install "-Dcss=enabled"
   cd ..
 }
 
 build_libdvdnav() {
-  download_and_unpack_file http://dvdnav.mplayerhq.hu/releases/libdvdnav-4.2.1.tar.xz # 4.2.1. latest revision before 5.x series [?]
-  cd libdvdnav-4.2.1
-    if [[ ! -f ./configure ]]; then
-      ./autogen.sh
-    fi
-    generic_configure_make_install
-    sed -i.bak 's/-ldvdnav.*/-ldvdnav -ldvdread -ldvdcss -lpsapi/' "$PKG_CONFIG_PATH/dvdnav.pc" # psapi for dlfcn ... [hrm?]
+  if [ ! -f "libdvdnav-7.0.0/unpacked.successfully" ]; then
+    echo "Downloading libdvdnav 7.0.0..."
+    curl -sL https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz
+    tar -xf libdvdnav-7.0.0.tar.xz
+    touch libdvdnav-7.0.0/unpacked.successfully
+  fi
+  cd libdvdnav-7.0.0
+    generic_meson_ninja_install
   cd ..
 }
 
@@ -2175,8 +2185,6 @@ build_vlc() {
   return
   # vlc's own dependencies:
   build_lua
-  build_libdvdread
-  build_libdvdnav
   build_libx265
   build_libjpeg_turbo
   build_ffmpeg
@@ -2236,7 +2244,7 @@ cpp = '${cross_prefix}g++'
 ld = '${cross_prefix}ld'
 ar = '${cross_prefix}ar'
 strip = '${cross_prefix}strip'
-pkgconfig = '${cross_prefix}pkg-config'
+pkgconfig = 'pkg-config'
 nm = '${cross_prefix}nm'
 windres = '${cross_prefix}windres'
 
@@ -2269,7 +2277,7 @@ get_local_meson_cross_with_propeties() {
   fi
   cat >> meson-cross.mingw.txt << EOF
 
-[properties]
+[built-in options]
 c_args = [$c_args]
 c_link_args = [$link_args]
 cpp_args = [$cpp_args]
@@ -2280,8 +2288,6 @@ EOF
 build_mplayer() {
   # pre requisites
   build_libjpeg_turbo
-  build_libdvdread
-  build_libdvdnav
 
   download_and_unpack_file https://sourceforge.net/projects/mplayer-edl/files/mplayer-export-snapshot.2014-05-19.tar.bz2 mplayer-export-2014-05-19
   cd mplayer-export-2014-05-19
@@ -2463,7 +2469,7 @@ build_ffmpeg() {
     config_options+=" --enable-libxml2"
     config_options+=" --enable-opengl"
     config_options+=" --enable-libdav1d"
-    config_options+=" --enable-gnutls"
+    config_options+=" --enable-gnutls --enable-libdvdnav --enable-libdvdread"
 
     if [[ $OSTYPE != darwin* ]]; then
       config_options+=" --enable-vulkan"
@@ -2506,7 +2512,7 @@ build_ffmpeg() {
       if [[ $ffmpeg_git_checkout_version != *"n6"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then
         git apply "$work_dir/SVT-AV1_git/.gitlab/workflows/linux/ffmpeg_n7_fix.patch"
       fi
-      config_options+=" --enable-libsvtav1"
+      config_options+=" "
     fi # else doesn't work/matter with 32 bit
     config_options+=" --enable-libvpx"
     config_options+=" --enable-libaom"
@@ -2770,7 +2776,7 @@ build_ffmpeg_dependencies() {
     if [[ $build_svt_vp9 = y ]]; then
       build_svt-vp9
     fi
-    build_svt-av1
+    # build_svt-av1
   fi
   build_vidstab
   #build_facebooktransform360 # needs modified ffmpeg to use it so not typically useful
@@ -2787,6 +2793,8 @@ build_ffmpeg_dependencies() {
 
   build_libxvid # FFmpeg now has native support, but libxvid still provides a better image.
   build_libsrt # requires gnutls, mingw-std-threads
+  build_libdvdread
+  build_libdvdnav
   if [[ $ffmpeg_git_checkout_version != *"n6.0"* ]] && [[ $ffmpeg_git_checkout_version != *"n5"* ]] && [[ $ffmpeg_git_checkout_version != *"n4"* ]] && [[ $ffmpeg_git_checkout_version != *"n3"* ]] && [[ $ffmpeg_git_checkout_version != *"n2"* ]]; then
     # Disable libaribcatption on old versions
     build_libaribcaption
