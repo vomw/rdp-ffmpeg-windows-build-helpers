@@ -18,7 +18,14 @@ def patch_file(filename):
     generic_meson_ninja_install
   cd ..
 }"""
-    content = re.sub(r'build_libdvdread\(\) \{.*?cd \.\.\n\}', new_dvdread, content, flags=re.DOTALL)
+    
+    pattern_read = r'build_libdvdread\(\) \{.*?\}\n'
+    if re.search(pattern_read, content, flags=re.DOTALL):
+        print("Patching build_libdvdread...")
+        content = re.sub(pattern_read, new_dvdread + "\n", content, flags=re.DOTALL)
+    else:
+        print("Error: build_libdvdread pattern not found!")
+        sys.exit(1)
 
     # 2. Replace build_libdvdnav
     new_dvdnav = """build_libdvdnav() {
@@ -32,28 +39,47 @@ def patch_file(filename):
     generic_meson_ninja_install
   cd ..
 }"""
-    content = re.sub(r'build_libdvdnav\(\) \{.*?cd \.\.\n\}', new_dvdnav, content, flags=re.DOTALL)
+    
+    pattern_nav = r'build_libdvdnav\(\) \{.*?\}\n'
+    if re.search(pattern_nav, content, flags=re.DOTALL):
+        print("Patching build_libdvdnav...")
+        content = re.sub(pattern_nav, new_dvdnav + "\n", content, flags=re.DOTALL)
+    else:
+        print("Error: build_libdvdnav pattern not found!")
+        sys.exit(1)
 
-    # 3. Disable SVT-AV1 calls
+    # 3. Disable SVT-AV1
+    print("Disabling SVT-AV1...")
     content = content.replace('    build_svt-av1', '    # build_svt-av1')
     content = content.replace('  build_svt-av1', '  # build_svt-av1')
-    
-    # 4. Remove SVT-AV1 from FFmpeg config
     content = content.replace('--enable-libsvtav1', '')
 
-    # 5. Inject DVD libraries into build_ffmpeg_dependencies
-    # First, remove any existing calls we might have added
-    content = re.sub(r'\n\s*build_libdvdread', '', content)
-    content = re.sub(r'\n\s*build_libdvdnav', '', content)
+    # 4. Inject DVD libraries into build tree
+    # Remove old injections to be idempotent
+    content = re.sub(r'\n\s*build_libdvdread(?!\(\))', '', content)
+    content = re.sub(r'\n\s*build_libdvdnav(?!\(\))', '', content)
     
     # Inject after libsrt
-    content = content.replace('build_libsrt # requires gnutls', 'build_libsrt # requires gnutls\n  build_libdvdread\n  build_libdvdnav')
+    if 'build_libsrt # requires gnutls' in content:
+        print("Injecting DVD library calls...")
+        content = content.replace('build_libsrt # requires gnutls', 'build_libsrt # requires gnutls\n  build_libdvdread\n  build_libdvdnav')
+    else:
+        print("Error: build_libsrt anchor not found!")
+        sys.exit(1)
 
-    # 6. Enable in FFmpeg config
-    content = content.replace('--enable-gnutls', '--enable-gnutls --enable-libdvdnav --enable-libdvdread')
+    # 5. Enable in FFmpeg configuration
+    if '--enable-gnutls' in content:
+        print("Enabling DVD libraries in FFmpeg config...")
+        # Use a regex to avoid double enabling if already present
+        if '--enable-libdvdnav' not in content:
+            content = content.replace('--enable-gnutls', '--enable-gnutls --enable-libdvdnav --enable-libdvdread')
+    else:
+        print("Error: --enable-gnutls anchor not found!")
+        sys.exit(1)
 
     with open(filename, 'w') as f:
         f.write(content)
+    print("Patching complete.")
 
 if __name__ == "__main__":
     patch_file(sys.argv[1])
