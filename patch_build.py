@@ -5,7 +5,7 @@ def patch_file(filename):
     with open(filename, 'r') as f:
         content = f.read()
 
-    # 1. Replace build_libdvdread
+    # 1. Replace build_libdvdread with Meson version
     new_dvdread = """build_libdvdread() {
   build_libdvdcss
   if [ ! -f "libdvdread-7.0.1/unpacked.successfully" ]; then
@@ -27,7 +27,7 @@ def patch_file(filename):
         print("Error: build_libdvdread pattern not found!")
         sys.exit(1)
 
-    # 2. Replace build_libdvdnav
+    # 2. Replace build_libdvdnav with Meson version
     new_dvdnav = """build_libdvdnav() {
   if [ ! -f "libdvdnav-7.0.0/unpacked.successfully" ]; then
     echo "Downloading libdvdnav 7.0.0..."
@@ -59,10 +59,11 @@ def patch_file(filename):
     content = re.sub(r'\n\s*build_libdvdread(?!\(\))', '', content)
     content = re.sub(r'\n\s*build_libdvdnav(?!\(\))', '', content)
     
-    # Inject after libsrt
-    if 'build_libsrt # requires gnutls' in content:
+    # Inject after libsrt line (matching full line to avoid trailing comma issues)
+    pattern_libsrt = r'(^\s*build_libsrt.*?$)'
+    if re.search(pattern_libsrt, content, re.MULTILINE):
         print("Injecting DVD library calls...")
-        content = content.replace('build_libsrt # requires gnutls', 'build_libsrt # requires gnutls\n  build_libdvdread\n  build_libdvdnav')
+        content = re.sub(pattern_libsrt, r'\1\n  build_libdvdread\n  build_libdvdnav', content, flags=re.MULTILINE)
     else:
         print("Error: build_libsrt anchor not found!")
         sys.exit(1)
@@ -70,7 +71,6 @@ def patch_file(filename):
     # 5. Enable in FFmpeg configuration
     if '--enable-gnutls' in content:
         print("Enabling DVD libraries in FFmpeg config...")
-        # Use a regex to avoid double enabling if already present
         if '--enable-libdvdnav' not in content:
             content = content.replace('--enable-gnutls', '--enable-gnutls --enable-libdvdnav --enable-libdvdread')
     else:

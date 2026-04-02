@@ -14,6 +14,7 @@ jobs:
 
       - name: Install host dependencies
         run: |
+          echo "::group::Installing apt packages"
           sudo apt-get update -qq
           sudo apt-get install -y -qq \
             subversion ragel curl texinfo g++ ed bison flex cvs yasm \
@@ -21,13 +22,21 @@ jobs:
             zlib1g-dev unzip pax nasm gperf autogen bzip2 \
             autoconf-archive p7zip-full meson clang python3-distutils \
             libtool-bin m4 gettext perl python3
+          echo "::endgroup::"
+          echo "::group::Tool versions"
+          cmake --version | head -n 1
+          meson --version
+          ninja --version
+          python3 --version
+          echo "::endgroup::"
 
-      - name: Prepare build script (Enable libdvdnav)
+      - name: Prepare build script
         run: |
+          echo "::group::Patching cross_compile_ffmpeg.sh"
           python3 patch_build.py cross_compile_ffmpeg.sh
-          echo "Build script patched successfully."
+          echo "::endgroup::"
 
-      - name: Run cross-compilation script
+      - name: Run cross-compilation
         run: |
           # Use -d for defaults: win64, static, skip prompts
           ./cross_compile_ffmpeg.sh -d
@@ -35,11 +44,13 @@ jobs:
       - name: Debug failure
         if: failure()
         run: |
-          echo "Build failed. Searching for relevant logs..."
+          echo "::group::Scanning for error logs"
+          # Print the last part of any config.log or meson-log.txt found
           find sandbox -name config.log -o -name meson-log.txt | while read log; do
             echo "--- $log (last 100 lines) ---"
             tail -n 100 "$log"
           done
+          echo "::endgroup::"
 
       - name: Upload Build Artifacts
         if: success()
