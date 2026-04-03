@@ -9,8 +9,8 @@ def patch_file(filename):
     # Note: Removed -Dcss=enabled because it causes "Unknown options" error in 7.0.1
     new_dvdread = """build_libdvdread() {
   build_libdvdcss
-  if [ ! -f "libdvdread-7.0.1/unpacked.successfully" ]; then
-    echo "Downloading libdvdread 7.0.1..."
+  if [ ! -f \"libdvdread-7.0.1/unpacked.successfully\" ]; then
+    echo \"Downloading libdvdread 7.0.1...\"
     curl -sL https://download.videolan.org/pub/videolan/libdvdread/7.0.1/libdvdread-7.0.1.tar.xz -o libdvdread-7.0.1.tar.xz
     tar -xf libdvdread-7.0.1.tar.xz
     touch libdvdread-7.0.1/unpacked.successfully
@@ -30,8 +30,8 @@ def patch_file(filename):
 
     # 2. Replace build_libdvdnav with Meson version
     new_dvdnav = """build_libdvdnav() {
-  if [ ! -f "libdvdnav-7.0.0/unpacked.successfully" ]; then
-    echo "Downloading libdvdnav 7.0.0..."
+  if [ ! -f \"libdvdnav-7.0.0/unpacked.successfully\" ]; then
+    echo \"Downloading libdvdnav 7.0.0...\"
     curl -sL https://download.videolan.org/pub/videolan/libdvdnav/7.0.0/libdvdnav-7.0.0.tar.xz -o libdvdnav-7.0.0.tar.xz
     tar -xf libdvdnav-7.0.0.tar.xz
     touch libdvdnav-7.0.0/unpacked.successfully
@@ -88,7 +88,7 @@ def patch_file(filename):
     if 'build_intel_qsv_mfx() {' in content:
         print("Patching mfx_dispatch build to fix Automake error...")
         # Use a more robust way to insert the sed commands
-        mfx_patch = 'cd mfx_dispatch_git\n    sed -i "s/libintel_gfx_api-x64.a/libintel_gfx_api_x64.la/g" Makefile.am || true\n    sed -i "s/libintel_gfx_api-x86.a/libintel_gfx_api_x86.la/g" Makefile.am || true'
+        mfx_patch = 'cd mfx_dispatch_git\n    sed -i \"s/libintel_gfx_api-x64.a/libintel_gfx_api_x64.la/g\" Makefile.am || true\n    sed -i \"s/libintel_gfx_api-x86.a/libintel_gfx_api_x86.la/g\" Makefile.am || true'
         content = content.replace('cd mfx_dispatch_git', mfx_patch)
 
     # 8. Upgrade libdvdcss to 1.4.3 (latest Autotools version)
@@ -107,7 +107,7 @@ def patch_file(filename):
         spirv_func = """build_spirv_headers() {
   do_git_checkout https://github.com/KhronosGroup/SPIRV-Headers.git
   cd SPIRV-Headers_git
-    do_cmake_and_install "-DCMAKE_BUILD_TYPE=Release"
+    do_cmake_and_install \"-DCMAKE_BUILD_TYPE=Release\"
   cd ..
 }
 
@@ -117,6 +117,23 @@ def patch_file(filename):
         
         # Insert call before build_vulkan call
         content = content.replace('    build_vulkan', '    build_spirv_headers\n    build_vulkan')
+
+    # 11. Fix missing timeapi.h in some MinGW-w64 versions
+    if 'Fixing missing timeapi.h' not in content:
+        print("Adding timeapi.h fix...")
+        timeapi_fix = """  build_meson_cross
+  # Fix missing timeapi.h in some MinGW-w64 versions
+  if [ ! -f "${mingw_w64_x86_64_prefix}/include/timeapi.h" ]; then
+    echo "Creating missing timeapi.h..."
+    mkdir -p "${mingw_w64_x86_64_prefix}/include"
+    cat > "${mingw_w64_x86_64_prefix}/include/timeapi.h" << EOF
+#ifndef _TIMEAPI_H_
+#define _TIMEAPI_H_
+#include <mmsystem.h>
+#endif
+EOF
+  fi"""
+        content = content.replace('  build_meson_cross', timeapi_fix)
 
     with open(filename, 'w') as f:
         f.write(content)
