@@ -91,6 +91,16 @@ def patch_file(filename):
         mfx_patch = 'cd mfx_dispatch_git\n    sed -i "s/libintel_gfx_api-x64.a/libintel_gfx_api_x64.la/g" Makefile.am || true\n    sed -i "s/libintel_gfx_api-x86.a/libintel_gfx_api_x86.la/g" Makefile.am || true'
         content = content.replace('cd mfx_dispatch_git', mfx_patch)
 
+    # 8. Upgrade libdvdcss to 1.4.3 (latest Autotools version)
+    print("Upgrading libdvdcss to 1.4.3...")
+    content = content.replace('https://download.videolan.org/pub/videolan/libdvdcss/1.2.13/libdvdcss-1.2.13.tar.bz2', 
+                              'https://download.videolan.org/pub/videolan/libdvdcss/1.4.3/libdvdcss-1.4.3.tar.bz2')
+
+    # 9. Fix possible issue with too long touchfile names in do_meson
+    print("Fixing do_meson touchfile name length...")
+    content = content.replace('local touch_name=$(get_small_touchfile_name already_built_meson "$configure_options $configure_name $LDFLAGS $CFLAGS")',
+                              'local touch_name=$(get_small_touchfile_name already_built_meson "$configure_name $LDFLAGS $CFLAGS")')
+
     with open(filename, 'w') as f:
         f.write(content)
     print("Patching complete.")
