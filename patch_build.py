@@ -101,6 +101,23 @@ def patch_file(filename):
     content = content.replace('local touch_name=$(get_small_touchfile_name already_built_meson "$configure_options $configure_name $LDFLAGS $CFLAGS")',
                               'local touch_name=$(get_small_touchfile_name already_built_meson "$configure_name $LDFLAGS $CFLAGS")')
 
+    # 10. Add SPIRV-Headers build and call
+    if 'build_spirv_headers' not in content:
+        print("Adding build_spirv_headers...")
+        spirv_func = """build_spirv_headers() {
+  do_git_checkout https://github.com/KhronosGroup/SPIRV-Headers.git
+  cd SPIRV-Headers_git
+    do_cmake_and_install "-DCMAKE_BUILD_TYPE=Release"
+  cd ..
+}
+
+"""
+        # Insert before build_vulkan definition
+        content = content.replace('build_vulkan() {', spirv_func + 'build_vulkan() {')
+        
+        # Insert call before build_vulkan call
+        content = content.replace('    build_vulkan', '    build_spirv_headers\n    build_vulkan')
+
     with open(filename, 'w') as f:
         f.write(content)
     print("Patching complete.")
